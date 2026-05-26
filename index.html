@@ -1,0 +1,757 @@
+import React, { useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import {
+  AlertTriangle,
+  Backpack,
+  Bug,
+  Droplets,
+  Flame,
+  Hammer,
+  Heart,
+  HelpCircle,
+  Home,
+  Leaf,
+  Map,
+  MessageCircle,
+  Pickaxe,
+  Recycle,
+  RotateCcw,
+  School,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Trophy,
+  Users,
+  Wind,
+} from "lucide-react";
+
+const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
+
+const zonaInicial = {
+  casa: {
+    id: "casa",
+    nombre: "Casa base",
+    icono: Home,
+    descripcion: "Lugar seguro para descansar, organizar recursos y planificar mejoras.",
+    riesgo: "Bajo",
+    contaminacion: 15,
+    agua: 70,
+    aire: 75,
+    plagas: 10,
+    investigada: false,
+    recursos: { aguaLimpia: 1, herramientas: 1 },
+    pista: "La casa base permite recuperar energía y revisar el estado general del barrio.",
+  },
+  plaza: {
+    id: "plaza",
+    nombre: "Plaza abandonada",
+    icono: Leaf,
+    descripcion: "Espacio verde deteriorado con basura, pasto alto y baja participación comunitaria.",
+    riesgo: "Medio",
+    contaminacion: 45,
+    agua: 52,
+    aire: 68,
+    plagas: 42,
+    investigada: false,
+    recursos: { madera: 3, semillas: 2, carton: 2 },
+    pista: "Los espacios verdes ayudan a mejorar el aire y la convivencia, pero si se abandonan acumulan residuos y plagas.",
+  },
+  arroyo: {
+    id: "arroyo",
+    nombre: "Arroyo contaminado",
+    icono: Droplets,
+    descripcion: "Zona con agua turbia, malos olores y posible presencia de mosquitos.",
+    riesgo: "Alto",
+    contaminacion: 80,
+    agua: 20,
+    aire: 45,
+    plagas: 78,
+    investigada: false,
+    recursos: { muestraAgua: 1, arena: 3, piedras: 2 },
+    pista: "El agua contaminada puede afectar la salud aunque no se vea peligrosa a simple vista.",
+  },
+  basural: {
+    id: "basural",
+    nombre: "Basural informal",
+    icono: Trash2,
+    descripcion: "Acumulación de residuos mezclados. Aumenta plagas, malos olores y enfermedades.",
+    riesgo: "Alto",
+    contaminacion: 90,
+    agua: 35,
+    aire: 38,
+    plagas: 86,
+    investigada: false,
+    recursos: { plastico: 4, metal: 3, carton: 3 },
+    pista: "La basura mezclada dificulta el reciclaje y puede atraer vectores de enfermedad.",
+  },
+  escuela: {
+    id: "escuela",
+    nombre: "Escuela del barrio",
+    icono: School,
+    descripcion: "Centro comunitario para crear campañas, carteles y actividades educativas.",
+    riesgo: "Medio",
+    contaminacion: 30,
+    agua: 62,
+    aire: 70,
+    plagas: 28,
+    investigada: false,
+    recursos: { informacion: 2, apoyoVecinal: 1 },
+    pista: "La educación ambiental mejora las decisiones de la comunidad y sostiene los cambios en el tiempo.",
+  },
+};
+
+const recursoLabels = {
+  madera: "Madera",
+  metal: "Metal",
+  plastico: "Plástico",
+  carton: "Cartón",
+  aguaLimpia: "Agua limpia",
+  apoyoVecinal: "Apoyo vecinal",
+  informacion: "Información",
+  herramientas: "Herramientas",
+  semillas: "Semillas",
+  arena: "Arena",
+  piedras: "Piedras",
+  muestraAgua: "Muestra de agua",
+};
+
+const construcciones = [
+  {
+    id: "puntoLimpio",
+    nombre: "Punto limpio",
+    zona: "basural",
+    efecto: "Reduce basura y permite separar residuos reciclables.",
+    costo: { madera: 2, metal: 2, apoyoVecinal: 1 },
+    cambios: { contaminacion: -28, plagas: -18, aire: 8 },
+    desbloqueo: "Basura en la esquina",
+  },
+  {
+    id: "filtroComunitario",
+    nombre: "Filtro comunitario",
+    zona: "arroyo",
+    efecto: "Mejora la calidad del agua y reduce riesgos sanitarios.",
+    costo: { arena: 2, piedras: 1, muestraAgua: 1, informacion: 1 },
+    cambios: { contaminacion: -18, agua: 35, plagas: -12 },
+    desbloqueo: "El olor del arroyo",
+  },
+  {
+    id: "compostera",
+    nombre: "Compostera barrial",
+    zona: "plaza",
+    efecto: "Transforma residuos orgánicos en abono y reduce basura.",
+    costo: { madera: 2, carton: 1, semillas: 1 },
+    cambios: { contaminacion: -16, plagas: -10, aire: 5 },
+    desbloqueo: "Basura en la esquina",
+  },
+  {
+    id: "campaniaEscuela",
+    nombre: "Campaña educativa",
+    zona: "escuela",
+    efecto: "Aumenta la participación vecinal y previene nuevas malas prácticas.",
+    costo: { informacion: 2, carton: 1 },
+    cambios: { contaminacion: -8, aire: 5, agua: 5 },
+    global: { participacion: 22 },
+    desbloqueo: "Campaña de prevención",
+  },
+  {
+    id: "drenaje",
+    nombre: "Drenaje contra criaderos",
+    zona: "arroyo",
+    efecto: "Disminuye agua estancada y presencia de mosquitos.",
+    costo: { madera: 1, piedras: 2, herramientas: 1 },
+    cambios: { plagas: -28, contaminacion: -10, agua: 12 },
+    desbloqueo: "Mosquitos después de la lluvia",
+  },
+  {
+    id: "huerta",
+    nombre: "Huerta comunitaria",
+    zona: "plaza",
+    efecto: "Aumenta alimentos, compromiso comunitario y mejora el espacio verde.",
+    costo: { semillas: 2, aguaLimpia: 2, apoyoVecinal: 1 },
+    cambios: { contaminacion: -10, aire: 10 },
+    global: { salud: 8, participacion: 12 },
+    desbloqueo: "Recuperar la plaza",
+  },
+];
+
+const misionesBase = [
+  {
+    id: "basura",
+    titulo: "Basura en la esquina",
+    objetivo: "Investigar el basural, clasificar residuos y construir un punto limpio.",
+    pasos: ["Explorar el basural", "Clasificar residuos", "Construir Punto limpio"],
+  },
+  {
+    id: "mosquitos",
+    titulo: "Mosquitos después de la lluvia",
+    objetivo: "Detectar agua estancada y construir un drenaje contra criaderos.",
+    pasos: ["Explorar el arroyo", "Hablar con vecinos", "Construir Drenaje contra criaderos"],
+  },
+  {
+    id: "arroyo",
+    titulo: "El olor del arroyo",
+    objetivo: "Tomar muestras, analizar el problema y construir un filtro comunitario.",
+    pasos: ["Recolectar muestra de agua", "Explorar el arroyo", "Construir Filtro comunitario"],
+  },
+  {
+    id: "campania",
+    titulo: "Campaña de prevención",
+    objetivo: "Usar la escuela para organizar información y participación barrial.",
+    pasos: ["Explorar la escuela", "Hablar con vecinos", "Construir Campaña educativa"],
+  },
+  {
+    id: "plaza",
+    titulo: "Recuperar la plaza",
+    objetivo: "Reducir contaminación y crear una huerta comunitaria.",
+    pasos: ["Explorar la plaza", "Construir Compostera barrial", "Construir Huerta comunitaria"],
+  },
+];
+
+function crearZonasIniciales() {
+  return Object.fromEntries(
+    Object.entries(zonaInicial).map(([id, zona]) => [
+      id,
+      {
+        ...zona,
+        recursos: { ...zona.recursos },
+      },
+    ])
+  );
+}
+
+function clonarZonas(zonas) {
+  return Object.fromEntries(
+    Object.entries(zonas).map(([id, zona]) => [
+      id,
+      {
+        ...zona,
+        recursos: { ...zona.recursos },
+      },
+    ])
+  );
+}
+
+function estadoInicial() {
+  return {
+    dia: 1,
+    energia: 90,
+    salud: 72,
+    participacion: 42,
+    zonas: crearZonasIniciales(),
+    inventario: {
+      madera: 4,
+      metal: 2,
+      plastico: 3,
+      carton: 2,
+      aguaLimpia: 2,
+      apoyoVecinal: 1,
+      informacion: 1,
+      herramientas: 1,
+      semillas: 1,
+      arena: 0,
+      piedras: 0,
+      muestraAgua: 0,
+    },
+    construidas: [],
+    acciones: [],
+    log: ["Día 1: llegaste al barrio. Explora las zonas, identifica riesgos y construye soluciones."],
+    tutorial: true,
+  };
+}
+
+function costoTexto(costo) {
+  return Object.entries(costo)
+    .map(([k, v]) => `${recursoLabels[k]} x${v}`)
+    .join(" · ");
+}
+
+function puedePagar(inv, costo) {
+  return Object.entries(costo).every(([k, v]) => (inv[k] || 0) >= v);
+}
+
+function promedioZonas(zonas, campo) {
+  const vals = Object.values(zonas).map((z) => z[campo]);
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+function calcularRiesgo(zona) {
+  const score = Math.round(zona.contaminacion * 0.45 + zona.plagas * 0.35 + (100 - zona.agua) * 0.2);
+  if (score >= 65) return "Alto";
+  if (score >= 35) return "Medio";
+  return "Bajo";
+}
+
+function StatCard({ icon: Icon, label, value, description, inverse = false }) {
+  const safe = inverse ? 100 - value : value;
+  const status = safe >= 70 ? "text-emerald-700" : safe >= 40 ? "text-amber-700" : "text-red-700";
+  return (
+    <Card className="rounded-2xl shadow-sm bg-white/90 border-slate-200">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Icon className="w-5 h-5" />
+          <span className="text-sm font-semibold text-slate-700">{label}</span>
+        </div>
+        <div className={`text-2xl font-bold ${status}`}>{value}%</div>
+        <Progress value={value} className="h-2" />
+        <p className="text-xs text-slate-500">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ZonaMapa({ zona, seleccionada, onClick, construcciones }) {
+  const Icon = zona.icono;
+  const riesgo = calcularRiesgo(zona);
+  const riesgoColor =
+    riesgo === "Alto"
+      ? "border-red-300 bg-red-50"
+      : riesgo === "Medio"
+      ? "border-amber-300 bg-amber-50"
+      : "border-emerald-300 bg-emerald-50";
+
+  return (
+    <motion.button
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className={`relative rounded-2xl border p-4 text-left shadow-sm transition ${riesgoColor} ${
+        seleccionada ? "ring-4 ring-slate-300" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <Icon className="w-7 h-7 text-slate-800" />
+        <span className="rounded-full bg-white/80 px-2 py-1 text-xs font-semibold text-slate-700">
+          Riesgo {riesgo}
+        </span>
+      </div>
+      <h3 className="mt-4 text-base font-bold text-slate-900">{zona.nombre}</h3>
+      <p className="mt-1 line-clamp-2 text-xs text-slate-600">{zona.descripcion}</p>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-slate-600">
+        <div>
+          <div>Cont.</div>
+          <Progress value={zona.contaminacion} className="h-1.5 mt-1" />
+        </div>
+        <div>
+          <div>Agua</div>
+          <Progress value={zona.agua} className="h-1.5 mt-1" />
+        </div>
+        <div>
+          <div>Plagas</div>
+          <Progress value={zona.plagas} className="h-1.5 mt-1" />
+        </div>
+      </div>
+      {construcciones.length > 0 && (
+        <div className="mt-3 rounded-xl bg-white/75 px-2 py-1 text-xs font-semibold text-slate-700">
+          {construcciones.length} mejora{construcciones.length > 1 ? "s" : ""} instalada{construcciones.length > 1 ? "s" : ""}
+        </div>
+      )}
+    </motion.button>
+  );
+}
+
+function MisionCard({ mision, completados }) {
+  const hechos = mision.pasos.filter((p) => completados.includes(p)).length;
+  const progreso = Math.round((hechos / mision.pasos.length) * 100);
+  const terminada = progreso === 100;
+  return (
+    <div className={`rounded-2xl border p-4 ${terminada ? "bg-emerald-50 border-emerald-200" : "bg-slate-50"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold">{mision.titulo}</h3>
+          <p className="text-sm text-slate-600">{mision.objetivo}</p>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          {terminada ? "Completada" : hechos > 0 ? "Activa" : "Pendiente"}
+        </span>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Progress value={progreso} className="h-2" />
+        <span className="w-10 text-right text-xs font-bold">{progreso}%</span>
+      </div>
+      <div className="mt-3 space-y-1">
+        {mision.pasos.map((paso) => (
+          <div key={paso} className="flex items-center gap-2 text-xs text-slate-600">
+            <span className={`h-2 w-2 rounded-full ${completados.includes(paso) ? "bg-emerald-500" : "bg-slate-300"}`} />
+            {paso}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function EcoBarrioInterface() {
+  const [game, setGame] = useState(estadoInicial);
+  const [zonaId, setZonaId] = useState("basural");
+  const zonaActiva = game.zonas[zonaId];
+  const IconZona = zonaActiva.icono;
+
+  const indicadores = useMemo(() => {
+    const contaminacion = promedioZonas(game.zonas, "contaminacion");
+    const agua = promedioZonas(game.zonas, "agua");
+    const aire = promedioZonas(game.zonas, "aire");
+    const plagas = promedioZonas(game.zonas, "plagas");
+    const riesgo = Math.round(contaminacion * 0.4 + plagas * 0.3 + (100 - agua) * 0.2 + (100 - aire) * 0.1);
+    return { contaminacion, agua, aire, plagas, riesgo };
+  }, [game.zonas]);
+
+  const completados = useMemo(() => game.acciones, [game.acciones]);
+  const misionesCompletadas = useMemo(
+    () => misionesBase.filter((m) => m.pasos.every((p) => completados.includes(p))).length,
+    [completados]
+  );
+
+  const victoria = indicadores.riesgo <= 28 && misionesCompletadas >= 4 && game.participacion >= 60;
+  const derrota = game.salud <= 0 || game.dia > 18 || indicadores.riesgo >= 95;
+
+  function agregarLog(msg) {
+    return (prev) => [msg, ...prev].slice(0, 8);
+  }
+
+  function gastarEnergia(base) {
+    const extra = indicadores.riesgo > 70 ? 4 : 0;
+    return base + extra;
+  }
+
+  function accion(tipo) {
+    if (victoria || derrota) return;
+
+    setGame((prev) => {
+      const zonas = clonarZonas(prev.zonas);
+      const z = zonas[zonaId];
+      const inv = { ...prev.inventario };
+      let salud = prev.salud;
+      let participacion = prev.participacion;
+      let energia = prev.energia;
+      let acciones = [...prev.acciones];
+      let logMsg = "";
+
+      if (tipo === "explorar") {
+        energia -= gastarEnergia(9);
+        z.investigada = true;
+        acciones.push(`Explorar ${z.nombre.replace("Casa base", "la casa").replace("Plaza abandonada", "la plaza").replace("Arroyo contaminado", "el arroyo").replace("Basural informal", "el basural").replace("Escuela del barrio", "la escuela")}`);
+        if (zonaId === "basural") acciones.push("Explorar el basural");
+        if (zonaId === "arroyo") acciones.push("Explorar el arroyo");
+        if (zonaId === "plaza") acciones.push("Explorar la plaza");
+        if (zonaId === "escuela") acciones.push("Explorar la escuela");
+        logMsg = `Exploraste ${z.nombre}. Pista: ${z.pista}`;
+      }
+
+      if (tipo === "recolectar") {
+        energia -= gastarEnergia(11);
+        Object.entries(z.recursos).forEach(([k, v]) => {
+          inv[k] = (inv[k] || 0) + v;
+        });
+        if (zonaId === "arroyo") acciones.push("Recolectar muestra de agua");
+        logMsg = `Recolectaste recursos en ${z.nombre}: ${costoTexto(z.recursos)}.`;
+      }
+
+      if (tipo === "clasificar") {
+        energia -= gastarEnergia(10);
+        if (["basural", "plaza"].includes(zonaId)) {
+          z.contaminacion = clamp(z.contaminacion - 10);
+          z.plagas = clamp(z.plagas - 7);
+          inv.plastico = (inv.plastico || 0) + 2;
+          inv.carton = (inv.carton || 0) + 1;
+          acciones.push("Clasificar residuos");
+          logMsg = "Separaste residuos reciclables. Bajó la contaminación y se recuperaron materiales.";
+        } else {
+          participacion = clamp(participacion + 3);
+          logMsg = "En esta zona no había mucha basura para clasificar, pero explicaste la importancia de separar residuos.";
+        }
+      }
+
+      if (tipo === "hablar") {
+        energia -= gastarEnergia(6);
+        participacion = clamp(participacion + 8);
+        inv.apoyoVecinal = (inv.apoyoVecinal || 0) + 1;
+        inv.informacion = (inv.informacion || 0) + 1;
+        acciones.push("Hablar con vecinos");
+        logMsg = "Hablaste con vecinos. Ganaste apoyo vecinal e información para sostener las mejoras.";
+      }
+
+      if (tipo === "descansar") {
+        energia = clamp(energia + 35);
+        salud = clamp(salud + 6);
+        logMsg = "Descansaste en la casa base. Recuperaste energía y salud.";
+      }
+
+      const riesgoLocal = Math.round(z.contaminacion * 0.45 + z.plagas * 0.35 + (100 - z.agua) * 0.2);
+      if (riesgoLocal > 70 && tipo !== "descansar") salud = clamp(salud - 4);
+
+      if (energia <= 0) {
+        energia = 25;
+        salud = clamp(salud - 10);
+        logMsg += " Te agotaste y perdiste salud. Conviene descansar.";
+      }
+
+      return {
+        ...prev,
+        zonas,
+        inventario: inv,
+        salud,
+        participacion,
+        energia: clamp(energia),
+        acciones: Array.from(new Set(acciones)),
+        log: agregarLog(logMsg)(prev.log),
+      };
+    });
+  }
+
+  function construir(item) {
+    if (victoria || derrota) return;
+    setGame((prev) => {
+      if (prev.construidas.includes(item.id)) return prev;
+      if (!puedePagar(prev.inventario, item.costo)) {
+        return { ...prev, log: agregarLog(`No tienes recursos suficientes para construir ${item.nombre}. Necesitas: ${costoTexto(item.costo)}.`)(prev.log) };
+      }
+
+      const zonas = clonarZonas(prev.zonas);
+      const inv = { ...prev.inventario };
+      Object.entries(item.costo).forEach(([k, v]) => (inv[k] = (inv[k] || 0) - v));
+
+      const z = zonas[item.zona];
+      Object.entries(item.cambios || {}).forEach(([k, v]) => (z[k] = clamp(z[k] + v)));
+
+      const acciones = [...prev.acciones, `Construir ${item.nombre}`];
+      const construidas = [...prev.construidas, item.id];
+      const global = item.global || {};
+
+      return {
+        ...prev,
+        zonas,
+        inventario: inv,
+        energia: clamp(prev.energia - 12),
+        salud: clamp(prev.salud + (global.salud || 0)),
+        participacion: clamp(prev.participacion + (global.participacion || 4)),
+        acciones: Array.from(new Set(acciones)),
+        construidas,
+        log: agregarLog(`Construiste ${item.nombre}. ${item.efecto}`)(prev.log),
+      };
+    });
+  }
+
+  function pasarDia() {
+    if (victoria || derrota) return;
+    setGame((prev) => {
+      const zonas = clonarZonas(prev.zonas);
+      const prevencion = prev.construidas.includes("campaniaEscuela") ? 1 : 3;
+      Object.values(zonas).forEach((z) => {
+        z.contaminacion = clamp(z.contaminacion + prevencion);
+        z.plagas = clamp(z.plagas + (z.agua < 45 ? 4 : 2));
+        z.aire = clamp(z.aire - (z.contaminacion > 70 ? 3 : 1));
+        z.agua = clamp(z.agua - (z.contaminacion > 65 ? 3 : 1));
+      });
+      const riesgo = promedioZonas(zonas, "contaminacion");
+      const danoSalud = riesgo > 70 ? 8 : riesgo > 45 ? 4 : 1;
+      return {
+        ...prev,
+        dia: prev.dia + 1,
+        energia: 90,
+        salud: clamp(prev.salud - danoSalud),
+        zonas,
+        log: agregarLog(`Comienza el día ${prev.dia + 1}. Si no hay prevención, la contaminación y las plagas vuelven a crecer.`)(prev.log),
+      };
+    });
+  }
+
+  function reiniciar() {
+    setGame(estadoInicial());
+    setZonaId("basural");
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-emerald-50 to-sky-50 p-4 text-slate-900">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <header className="flex flex-col gap-3 rounded-3xl bg-white/90 p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+              <Leaf className="w-5 h-5" /> Survival RPG educativo
+            </div>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">EcoBarrio: sobrevivir, construir y cuidar</h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Explora el barrio, identifica factores de riesgo, recolecta recursos y construye soluciones ambientales antes de que el riesgo sea irreversible.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="rounded-2xl" onClick={() => setGame((p) => ({ ...p, tutorial: !p.tutorial }))}>
+              <HelpCircle className="mr-2 h-4 w-4" /> Ayuda
+            </Button>
+            <Button variant="outline" className="rounded-2xl" onClick={pasarDia}>
+              <Sparkles className="mr-2 h-4 w-4" /> Pasar día
+            </Button>
+            <Button className="rounded-2xl" onClick={reiniciar}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reiniciar
+            </Button>
+          </div>
+        </header>
+
+        {game.tutorial && (
+          <Card className="rounded-3xl border-emerald-200 bg-emerald-50 shadow-sm">
+            <CardContent className="p-4 text-sm text-emerald-950">
+              <strong>Objetivo:</strong> completa al menos 4 misiones, baja el riesgo global a 28% o menos y sube la participación vecinal a 60% o más antes del día 18. Explorar revela problemas, recolectar suma recursos, clasificar reduce residuos y hablar suma apoyo e información.
+            </CardContent>
+          </Card>
+        )}
+
+        {(victoria || derrota) && (
+          <Card className={`rounded-3xl shadow-sm ${victoria ? "bg-emerald-100 border-emerald-300" : "bg-red-100 border-red-300"}`}>
+            <CardContent className="p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {victoria ? <Trophy className="h-8 w-8 text-emerald-700" /> : <AlertTriangle className="h-8 w-8 text-red-700" />}
+                <div>
+                  <h2 className="text-2xl font-black">{victoria ? "Victoria comunitaria" : "El barrio entró en crisis"}</h2>
+                  <p className="text-sm text-slate-700">
+                    {victoria
+                      ? "La comunidad logró reducir los riesgos ambientales y sostener mejoras colectivas. El barrio se transforma en un ecobarrio." 
+                      : "La contaminación, el tiempo o la pérdida de salud hicieron insostenible la situación. Reintenta priorizando riesgos altos."}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={reiniciar} className="rounded-2xl"><RotateCcw className="mr-2 h-4 w-4" /> Jugar otra vez</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        <section className="grid gap-3 md:grid-cols-6">
+          <StatCard icon={Heart} label="Salud" value={game.salud} description="Baja al exponerse a zonas críticas." />
+          <StatCard icon={Sparkles} label="Energía" value={game.energia} description="Se gasta en acciones. Descansa si baja demasiado." />
+          <StatCard icon={Droplets} label="Agua" value={indicadores.agua} description="Mejora con filtros y drenajes." />
+          <StatCard icon={Wind} label="Aire" value={indicadores.aire} description="Empeora con quema, basura y contaminación." />
+          <StatCard icon={Users} label="Participación" value={game.participacion} description="Clave para sostener cambios." />
+          <StatCard icon={AlertTriangle} label="Riesgo global" value={indicadores.riesgo} inverse description={`Día ${game.dia} de 18.`} />
+        </section>
+
+        <main className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
+          <section className="rounded-3xl bg-white/90 p-4 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2"><Map className="h-5 w-5" /> Vista del barrio</h2>
+                <p className="text-sm text-slate-500">Selecciona una zona para investigar, recolectar recursos y actuar.</p>
+              </div>
+              <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-sm font-semibold">
+                <ShieldCheck className="h-4 w-4" /> Misiones: {misionesCompletadas}/{misionesBase.length}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {Object.values(game.zonas).map((zona) => (
+                <ZonaMapa
+                  key={zona.id}
+                  zona={zona}
+                  seleccionada={zona.id === zonaActiva.id}
+                  onClick={() => setZonaId(zona.id)}
+                  construcciones={construcciones.filter((c) => c.zona === zona.id && game.construidas.includes(c.id))}
+                />
+              ))}
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <Card className="rounded-3xl bg-white/90 shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl bg-slate-100 p-3"><IconZona className="h-7 w-7" /></div>
+                  <div>
+                    <h2 className="text-xl font-bold">{zonaActiva.nombre}</h2>
+                    <p className="text-sm text-slate-600">{zonaActiva.descripcion}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl border bg-slate-50 p-3 text-center">
+                    <div className="text-xs text-slate-500">Contaminación</div>
+                    <div className="text-lg font-black">{zonaActiva.contaminacion}%</div>
+                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-3 text-center">
+                    <div className="text-xs text-slate-500">Agua</div>
+                    <div className="text-lg font-black">{zonaActiva.agua}%</div>
+                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-3 text-center">
+                    <div className="text-xs text-slate-500">Plagas</div>
+                    <div className="text-lg font-black">{zonaActiva.plagas}%</div>
+                  </div>
+                </div>
+
+                {zonaActiva.investigada && <p className="rounded-2xl bg-sky-50 p-3 text-sm text-sky-950">{zonaActiva.pista}</p>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button className="rounded-2xl" onClick={() => accion("explorar")}><Pickaxe className="mr-2 h-4 w-4" /> Explorar</Button>
+                  <Button variant="outline" className="rounded-2xl" onClick={() => accion("recolectar")}><Backpack className="mr-2 h-4 w-4" /> Recolectar</Button>
+                  <Button variant="outline" className="rounded-2xl" onClick={() => accion("clasificar")}><Recycle className="mr-2 h-4 w-4" /> Clasificar</Button>
+                  <Button variant="outline" className="rounded-2xl" onClick={() => accion("hablar")}><MessageCircle className="mr-2 h-4 w-4" /> Hablar</Button>
+                  <Button variant="outline" className="rounded-2xl col-span-2" onClick={() => accion("descansar")}><Home className="mr-2 h-4 w-4" /> Descansar en casa base</Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-3xl bg-white/90 shadow-sm">
+              <CardContent className="p-5">
+                <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Backpack className="h-5 w-5" /> Inventario</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(game.inventario).filter(([, v]) => v > 0).map(([k, v]) => (
+                    <div key={k} className="rounded-2xl border bg-slate-50 p-3">
+                      <div className="text-xs text-slate-500">{recursoLabels[k]}</div>
+                      <div className="text-xl font-black">{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
+        </main>
+
+        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <Card className="rounded-3xl bg-white/90 shadow-sm">
+            <CardContent className="p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Hammer className="h-5 w-5" /> Construcciones</h2>
+              <div className="space-y-3">
+                {construcciones.map((c) => {
+                  const construida = game.construidas.includes(c.id);
+                  const pagable = puedePagar(game.inventario, c.costo);
+                  return (
+                    <div key={c.id} className={`rounded-2xl border p-3 ${construida ? "bg-emerald-50 border-emerald-200" : "bg-white"}`}>
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <strong>{c.nombre}</strong>
+                          <p className="mt-1 text-sm text-slate-600">{c.efecto}</p>
+                          <p className="mt-1 text-xs text-slate-500">Zona: {zonaInicial[c.zona].nombre} · Costo: {costoTexto(c.costo)}</p>
+                        </div>
+                        <Button disabled={construida || !pagable || victoria || derrota} onClick={() => construir(c)} className="rounded-2xl shrink-0" variant={construida ? "outline" : "default"}>
+                          {construida ? "Instalada" : pagable ? "Construir" : "Faltan recursos"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl bg-white/90 shadow-sm">
+            <CardContent className="p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Bug className="h-5 w-5" /> Misiones ambientales</h2>
+              <div className="space-y-3">
+                {misionesBase.map((m) => <MisionCard key={m.id} mision={m} completados={completados} />)}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card className="rounded-3xl bg-white/90 shadow-sm">
+          <CardContent className="p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold"><Flame className="h-5 w-5" /> Registro de sucesos</h2>
+            <div className="space-y-2">
+              {game.log.map((l, i) => (
+                <div key={`${l}-${i}`} className="rounded-2xl bg-slate-50 px-4 py-2 text-sm text-slate-700">{l}</div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
